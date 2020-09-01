@@ -96,6 +96,7 @@ static void MX_GPIO_Init(void);
 /* Private function prototypes -----------------------------------------------*/
 void write_flash_sector(uint32_t currentPage);
 extern uint8_t USBD_CUSTOM_HID_SendReport(USBD_HandleTypeDef *pdev, uint8_t *report, uint16_t len);
+void Bootloader_JumpToSysMem(void);
 
 /* USER CODE END PFP */
 
@@ -135,13 +136,22 @@ int main(void)
 
   magic_val = LL_RTC_BAK_GetRegister(RTC, HID_MAGIC_NUMBER_BKP_INDEX);
 
+#ifdef IS_WEACT_BOARD
+  /* If BOOT_2_PIN is LOW, jump to the ROM bootloader */
+  if ((HAL_GPIO_ReadPin(BOOT_2_PORT, BOOT_2_PIN) == BOOT_2_ENABLED)) {
+    Bootloader_JumpToSysMem();
+  }
+#endif
+
   /* In case of incoming magic number or <BOOT_1_PIN> is LOW,
     jump to HID bootloader */
 #ifdef IS_WEACT_BOARD
   #warning "Assuming we're building for WeAct F411"
 #endif
   if ((magic_val != 0x424C)&&(HAL_GPIO_ReadPin(BOOT_1_PORT, BOOT_1_PIN) != BOOT_1_ENABLED)) {
+#ifndef DISABLE_LED
     HAL_GPIO_WritePin(LED_1_PORT, LED_1_PIN, GPIO_PIN_SET);
+#endif
     typedef void (*pFunction)(void);
     pFunction Jump_To_Application;
     uint32_t JumpAddress;
@@ -324,7 +334,7 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /* Configure GPIO pin : PB2 */
+  /* Configure GPIO pin : BOOT_1_PIN */
   GPIO_InitStruct.Pin = BOOT_1_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
 #ifndef IS_WEACT_BOARD
@@ -334,12 +344,23 @@ static void MX_GPIO_Init(void)
 #endif
   HAL_GPIO_Init(BOOT_1_PORT, &GPIO_InitStruct);
 
-  /* Configure GPIO pin : PE0 */
+
+#ifdef IS_WEACT_BOARD
+  /* Configure GPIO pin : BOOT_2_PIN */
+  GPIO_InitStruct.Pin = BOOT_2_PIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(BOOT_2_PORT, &GPIO_InitStruct);
+#endif
+
+#ifndef DISABLE_LED
+  /* Configure GPIO pin : LED_1_PIN */
   GPIO_InitStruct.Pin = LED_1_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_1_PORT, &GPIO_InitStruct);
+#endif
 }
 
 /* USER CODE BEGIN 4 */
@@ -347,7 +368,9 @@ void write_flash_sector(uint32_t currentPage) {
   uint32_t pageAddress = FLASH_BASE + (currentPage * SECTOR_SIZE);
   uint32_t SectorError;
 
+#ifndef DISABLE_LED
   HAL_GPIO_WritePin(LED_1_PORT, LED_1_PIN, GPIO_PIN_SET);	
+#endif
   FLASH_EraseInitTypeDef EraseInit;
   HAL_FLASH_Unlock();
 
@@ -379,7 +402,9 @@ void write_flash_sector(uint32_t currentPage) {
     dat += pageData[i];
     HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, pageAddress + i, dat);
   }
+#ifndef DISABLE_LED
   HAL_GPIO_WritePin(LED_1_PORT, LED_1_PIN,GPIO_PIN_RESET);  
+#endif
   HAL_FLASH_Lock();
 }
 /* USER CODE END 4 */
@@ -399,6 +424,29 @@ void _Error_Handler(char *file, int line)
   }
 
   /* USER CODE END Error_Handler_Debug */
+}
+
+void Bootloader_JumpToSysMem(void)
+{
+    typedef void (*pFunction)(void);
+    uint32_t  JumpAddress = *(__IO uint32_t*)(SYSMEM_ADDRESS + 4);
+    pFunction Jump        = (pFunction)JumpAddress;
+
+    HAL_RCC_DeInit();
+    HAL_DeInit();
+
+    SysTick->CTRL = 0;
+    SysTick->LOAD = 0;
+    SysTick->VAL  = 0;
+
+    __HAL_RCC_SYSCFG_CLK_ENABLE();
+    __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
+
+    __set_MSP(*(__IO uint32_t*)SYSMEM_ADDRESS);
+    Jump();
+
+    while(1)
+        ;
 }
 
 #ifdef  USE_FULL_ASSERT

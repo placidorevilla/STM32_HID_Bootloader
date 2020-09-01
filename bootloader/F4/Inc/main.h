@@ -92,16 +92,22 @@
 
 #define HID_MAGIC_NUMBER_BKP_INDEX LL_RTC_BKP_DR4
 #define HID_MAGIC_NUMBER_BKP_VALUE 0x424C
+
+#define SYSMEM_ADDRESS (uint32_t)0x1FFF0000
                              
                         
 
 #ifdef IS_WEACT_BOARD
-#define BOOT_1_PIN      GPIO_PIN_0 //WeAct STM32F4X1 board (Button PA0, LED PC13)
+#define BOOT_1_PIN      GPIO_PIN_9
 #define BOOT_1_PORT     GPIOA
 #define BOOT_1_ENABLED  GPIO_PIN_RESET
+#define BOOT_2_PIN      GPIO_PIN_10
+#define BOOT_2_PORT     GPIOA
+#define BOOT_2_ENABLED  GPIO_PIN_RESET
 #define LED_1_PIN       GPIO_PIN_13
 #define LED_1_PORT      GPIOC
 #define HSE_VALUE       (25000000)
+#define DISABLE_LED
 #else
 #define BOOT_1_PIN      GPIO_PIN_15 //DIYMROE STM32F407VGT board (Button PD15, LED PE0)
 #define BOOT_1_PORT     GPIOD
